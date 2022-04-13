@@ -1,0 +1,56 @@
+FROM ubuntu:20.04
+
+#Packages and dependencies 
+RUN  DEBIAN_FRONTEND=noninteractive apt-get update -y && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
+  DEBIAN_FRONTEND=noninteractive \
+  apt-get install -y build-essential zlib1g-dev libyaml-dev libssl-dev libgdbm-dev libre2-dev \
+  libreadline-dev libncurses5-dev libffi-dev curl openssh-server libxml2-dev libxslt-dev \
+  libcurl4-openssl-dev libicu-dev logrotate rsync python-docutils pkg-config cmake runit-systemd 
+
+RUN apt-get install -y software-properties-common 
+RUN  echo "\n" | add-apt-repository ppa:git-core/ppa && apt update -y && apt install  -y git libimage-exiftool-perl
+
+#ruby 
+RUN mkdir /tmp/ruby && cd /tmp/ruby && curl --remote-name --location --progress-bar "https://cache.ruby-lang.org/pub/ruby/2.7/ruby-2.7.4.tar.gz" \
+    && tar xzf ruby-2.7.4.tar.gz && cd ruby-2.7.4 && ./configure --disable-install-rdoc --enable-shared && make install
+
+#go
+COPY ./go1.18.linux-amd64.tar.gz /root/go1.18.linux-amd64.tar.gz 
+RUN  rm -rf /usr/local/go && cd /root && tar -C /usr/local -xzf go1.18.linux-amd64.tar.gz && \
+  echo "export PATH=$PATH:/usr/local/go/bin" >> /etc/profile  && rm go1.18.linux-amd64.tar.gz 
+
+ENV PATH=$PATH:/usr/local/go/bin
+
+#nodejs
+RUN curl --location "https://deb.nodesource.com/setup_16.x" |  bash - && apt-get install -y nodejs && npm install --global yarn
+RUN apt install -y postgresql postgresql-client libpq-dev postgresql-contrib  redis-server sudo vim 
+
+#gitlab code
+RUN mkdir -p /home/git && cd /home/git &&  git clone https://github.com/snowcrystall/gitlab_emg.git gitlab &&  git clone https://github.com/snowcrystall/gitaly_emg.git gitaly
+#gitlab & gitaly 
+RUN cd /home/git/gitlab && bundle config set --local deployment 'true' && bundle config set --local without 'development test mysql aws kerberos' && bundle install
+RUN cd /home/git/gitaly/ruby && bundle config set --local deployment 'true' && bundle config set --local without 'development test mysql aws kerberos' && bundle install
+RUN cd /home/git/gitaly && make install
+RUN cd /home/git/gitlab/workhorse &&  make install
+
+COPY conf/* /home/git/gitlab/config/
+
+RUN cd /home/git/gitlab && ls -al config/ &&  bundle exec rake gitlab:shell:install RAILS_ENV=production
+
+COPY ./initial.sh /tmp/
+COPY ./entrypoint.sh /home/git/
+RUN  cd /tmp/ && chmod +x initial.sh && ./initial.sh
+COPY  ./init.d  /home/git/init.d
+RUN chmod +x /home/git/entrypoint.sh
+#VOLUME [ "/home/git/gitlab","/home/git/gitaly" ]
+RUN apt-get install -y nginx 
+COPY conf/nginx_gitlab.conf /etc/nginx/sites-enabled/gitlab
+RUN cd /home/git/gitlab && yarn install --production --pure-lockfile &&  bundle exec rake gitlab:assets:compile RAILS_ENV=production NODE_ENV=production
+
+
+
+WORKDIR /home/git
+EXPOSE 8080
+#ENTRYPOINT ["/home/git/entrypoint.sh"]
+
+

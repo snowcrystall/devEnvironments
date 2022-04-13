@@ -1,0 +1,17 @@
+FROM gitlab/gitlab-ce:14.2.3-ce.0
+
+COPY tmp_asset/bin/gitaly /opt/gitlab/embedded/bin/gitaly
+COPY tmp_asset/bin/gitlab-workhorse /opt/gitlab/embedded/bin/gitlab-workhorse
+
+COPY tmp_asset/gitlab/app /opt/gitlab/embedded/service/gitlab-rails/app
+COPY tmp_asset/gitlab/config /opt/gitlab/embedded/service/gitlab-rails/config
+RUN rm -rf /opt/gitlab/embedded/service/gitlab-rails/db
+COPY tmp_asset/gitlab/db /opt/gitlab/embedded/service/gitlab-rails/db
+COPY tmp_asset/gitlab/lib /opt/gitlab/embedded/service/gitlab-rails/lib
+RUN rm -rf /opt/gitlab/embedded/service/gitlab-rails/locale
+COPY tmp_asset/gitlab/locale /opt/gitlab/embedded/service/gitlab-rails/locale
+COPY tmp_asset/gitlab/assets  /opt/gitlab/embedded/service/gitlab-rails/public/assets
+COPY gitlab.rb /etc/gitlab/gitlab.rb 
+RUN mkdir /opt/gitlab/embedded/service/gitlab-rails/public/tmp && chmod -R 777 /opt/gitlab/embedded/service/gitlab-rails/public/tmp
+
+
